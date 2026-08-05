@@ -139,24 +139,27 @@ class YOLOCrackDetector:
       cy = y + h / 2.0
       cx = x + w / 2.0
       
-      # Spatial Filters to isolate concrete beam:
-      # - Exclude the upper 18% of the image (blue metal bridge railing & sky)
-      # - Exclude the lower 22% of the image (ground, grass, road)
-      if cy < height * 0.18 or cy > height * 0.78:
+      # Spatial Filters to isolate actual structure areas:
+      # - Exclude the absolute outer borders (outer 6% of height/width) to filter out camera frame lines
+      if cy < height * 0.06 or cy > height * 0.94 or cx < width * 0.05 or cx > width * 0.95:
         continue
         
       # Filter out noise (extremely tiny contours)
       if w < 4 or h < 4 or cv2.contourArea(c) < 10:
         continue
         
-      # Exclude excessively large boxes (e.g. horizontal beam edges, sky borders, or full-frame segments)
-      if w > width * 0.35 or h > height * 0.4 or (w * h) > (width * height * 0.1):
+      # Exclude full-frame borders (contours that are both very wide and very tall)
+      if w > width * 0.75 and h > height * 0.75:
+        continue
+        
+      # Exclude excessively wide objects (like horizontal borders, beam layers, or ground lines)
+      if w > width * 0.45:
         continue
         
       # Scoring factor: Cracks are vertical/diagonal, so we prefer vertical length (h)
-      # and centrality to the horizontal concrete beam
-      closeness_to_beam_center = 1.0 - abs(cy - height * 0.45) / (height * 0.45)
-      score = h * 1.5 + w + closeness_to_beam_center * 150.0
+      # and centrality to the core image vertical axis
+      closeness_to_center = 1.0 - abs(cy - height * 0.5) / (height * 0.5)
+      score = h * 2.0 + w + closeness_to_center * 100.0
       
       candidate_defects.append({
           "contour": c,
