@@ -15,7 +15,7 @@ from typing import List, Optional
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("yolo-granite-inspect")
 
-app = FastAPI(title="IBM Infrastructure Inspect - YOLO11x + Granite Diagnostic Core", version="11.0.0")
+app = FastAPI(title="IBM Infrastructure Inspect - YOLOX-S + Granite Diagnostic Core", version="10.0.0")
 
 # Configure CORS
 app.add_middleware(
@@ -62,8 +62,8 @@ class YOLOCrackDetector:
     self.model = None
     if YOLO_AVAILABLE:
       try:
-        weights_options = ["crack_yolo11.pt", "crack_yolo.pt", "best.pt", "yolo11x.pt", "yolo11n.pt", "yolov8n.pt"]
-        selected_weights = "yolo11x.pt"
+        weights_options = ["crack_yolox.pt", "best.pt", "yolox-s.pt", "yolox_s.pt"]
+        selected_weights = "yolox-s.pt"
         for w in weights_options:
           if os.path.exists(w):
             selected_weights = w
@@ -325,7 +325,7 @@ async def generate_granite_report(defects: List[dict], overall_severity: str, de
 def read_status():
   return {
       "status": "healthy",
-      "engine": "YOLO11x Diagnostics Core",
+      "engine": "YOLOX-S Diagnostics Core",
       "yolo_active": detector.is_active(),
       "granite_active": bool(HF_TOKEN),
       "accuracy_f1": 0.9842,
