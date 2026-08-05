@@ -149,6 +149,10 @@ class YOLOCrackDetector:
       if w < 4 or h < 4 or cv2.contourArea(c) < 10:
         continue
         
+      # Exclude excessively large boxes (e.g. horizontal beam edges, sky borders, or full-frame segments)
+      if w > width * 0.35 or h > height * 0.4 or (w * h) > (width * height * 0.1):
+        continue
+        
       # Scoring factor: Cracks are vertical/diagonal, so we prefer vertical length (h)
       # and centrality to the horizontal concrete beam
       closeness_to_beam_center = 1.0 - abs(cy - height * 0.45) / (height * 0.45)
