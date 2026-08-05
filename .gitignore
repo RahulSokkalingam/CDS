@@ -32,3 +32,8 @@ backend/.env
 # Large model weight files
 *.pt
 backend/*.pt
+
+# Python caches
+__pycache__/
+backend/__pycache__/
+*.pyc
