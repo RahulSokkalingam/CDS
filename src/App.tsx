@@ -120,7 +120,7 @@ const DEMO_ASSETS: DemoAsset[] = [
 function App() {
   const [darkMode, setDarkMode] = useState<boolean>(true);
   const [selectedAsset, setSelectedAsset] = useState<DemoAsset | null>(null);
-  // Unused state removed
+  const [selectedEngine, setSelectedEngine] = useState<"yolo" | "gemini">("yolo");
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [analysisProgress, setAnalysisProgress] = useState<number>(0);
   const [analysisStepText, setAnalysisStepText] = useState<string>("");
@@ -254,7 +254,7 @@ function App() {
       const formData = new FormData();
       formData.append("file", file);
 
-      axios.post("http://localhost:8000/api/upload", formData, {
+      axios.post(`http://localhost:8000/api/upload?engine=${selectedEngine}`, formData, {
         headers: {
           "Content-Type": "multipart/form-data",
         },
@@ -515,6 +515,36 @@ function App() {
 
               <div style={{ textAlign: "center", fontSize: "0.75rem", fontFamily: "var(--font-mono)", color: "var(--muted-foreground)", margin: "1.5rem 0" }}>
                 — OR UPLOAD CUSTOM STRUCTURAL PHOTO —
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "12px", marginBottom: "1.5rem" }}>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.75rem", color: "var(--muted-foreground)", textTransform: "uppercase" }}>
+                  Selected Engine:
+                </span>
+                <div style={{ position: "relative" }}>
+                  <select
+                    value={selectedEngine}
+                    onChange={(e) => setSelectedEngine(e.target.value as "yolo" | "gemini")}
+                    style={{
+                      backgroundColor: "var(--muted)",
+                      color: "var(--foreground)",
+                      border: "1px solid var(--border)",
+                      borderRadius: "0px",
+                      padding: "0.4rem 2rem 0.4rem 0.75rem",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: "0.75rem",
+                      textTransform: "uppercase",
+                      appearance: "none",
+                      cursor: "pointer"
+                    }}
+                  >
+                    <option value="yolo">YOLOv8-Seg (Local Model)</option>
+                    <option value="gemini">Gemini 2.5 Flash (Cloud VLM)</option>
+                  </select>
+                  <div style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", fontSize: "0.55rem", color: "var(--muted-foreground)" }}>
+                    ▼
+                  </div>
+                </div>
               </div>
 
               <div
