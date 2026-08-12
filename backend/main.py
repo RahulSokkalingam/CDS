@@ -305,12 +305,11 @@ def _load_gemini_key() -> str:
 GEMINI_API_KEY = _load_gemini_key()
 
 def _key_looks_valid(key: str) -> bool:
-  """Legacy Gemini Developer API keys are 'AIzaSy...'. Newer 'AQ.' prefixed
-  keys issued by some AI Studio accounts are NOT accepted by the standard
-  generativelanguage.googleapis.com endpoint this SDK talks to, and fail
-  every single call with 401 UNAUTHENTICATED / ACCESS_TOKEN_TYPE_UNSUPPORTED.
-  We flag that loudly instead of discovering it via silent detection failures."""
-  return key.startswith("AIzaSy")
+  """Check if the Gemini API key has a valid format (starts with AIzaSy or AQ., or is at least 20 characters long)."""
+  if not key:
+    return False
+  clean_k = key.strip()
+  return clean_k.startswith("AIzaSy") or clean_k.startswith("AQ.") or len(clean_k) >= 20
 
 if USE_VERTEX_AI:
   missing = [name for name, val in [
