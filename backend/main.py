@@ -14,7 +14,7 @@ from google.genai import types
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Any
 from dotenv import load_dotenv
 
 # Load environment variables from .env if present
