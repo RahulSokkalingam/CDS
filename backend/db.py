@@ -126,16 +126,17 @@ def hash_password(password: str) -> str:
 
 def init_db():
     Base.metadata.create_all(bind=engine)
-    _seed_admin()
+    _seed_default_users()
 
 
-def _seed_admin():
-    """Ensure the hardcoded admin account always exists."""
+def _seed_default_users():
+    """Ensure the hardcoded admin account and initial demo accounts always exist with valid password hashes."""
     db: Session = SessionLocal()
     try:
         pwd_hash = hash_password(ADMIN_PASSWORD)
         now = datetime.now().isoformat()
         
+        # 1. Admin account
         user = db.query(User).filter(User.email == ADMIN_EMAIL.lower().strip()).first()
         if not user:
             admin_user = User(
@@ -152,10 +153,35 @@ def _seed_admin():
             user.password_hash = pwd_hash
             user.is_admin = 1
             user.approved = 1
+            user.role = "inspector"
+
+        # 2. Demo accounts: publicreporter1, manual1, drone1
+        demo_accounts = [
+            ("publicreporter1@email.com", "publicreporter1", "normal", 0, 1),
+            ("manual1@email.com", "manual1", "inspector", 0, 1),
+            ("drone1@email.com", "drone1", "drone", 0, 1),
+        ]
+        for demo_email, demo_name, demo_role, demo_is_admin, demo_approved in demo_accounts:
+            existing = db.query(User).filter(User.email == demo_email.lower().strip()).first()
+            if not existing:
+                u = User(
+                    email=demo_email.lower().strip(),
+                    password_hash=pwd_hash,
+                    name=demo_name,
+                    role=demo_role,
+                    is_admin=demo_is_admin,
+                    approved=demo_approved,
+                    created_at=now,
+                )
+                db.add(u)
+            else:
+                existing.password_hash = pwd_hash
+                existing.approved = demo_approved
+
         db.commit()
     except Exception as e:
         db.rollback()
-        print(f"Error seeding admin user: {e}")
+        print(f"Error seeding default users: {e}")
     finally:
         db.close()
 

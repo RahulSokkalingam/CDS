@@ -29,17 +29,11 @@ logger = logging.getLogger("gemini-granite-inspect")
 
 app = FastAPI(title="CDS Crack Detection System - Gemini Cloud Scan", version="10.0.0")
 
-# Configure CORS dynamically from ALLOWED_ORIGINS environment variable
-allowed_origins_env = os.environ.get("ALLOWED_ORIGINS", "")
-if allowed_origins_env:
-    origins = [o.strip() for o in allowed_origins_env.split(",") if o.strip()]
-else:
-    origins = ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:4173"]
-
+# Configure CORS to accept requests from Vercel frontend, local dev, and custom domains
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

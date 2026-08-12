@@ -31,7 +31,10 @@ export const AuthView: React.FC<AuthViewProps> = ({ onAuthSuccess }) => {
     e.preventDefault();
     setErrorMsg(null);
 
-    if (!email || !password || (isSignUp && !name)) {
+    const cleanedEmail = email.trim().toLowerCase();
+    const cleanedName = name.trim();
+
+    if (!cleanedEmail || !password || (isSignUp && !cleanedName)) {
       setErrorMsg("Please fill out all required fields.");
       return;
     }
@@ -40,9 +43,9 @@ export const AuthView: React.FC<AuthViewProps> = ({ onAuthSuccess }) => {
     try {
       if (isSignUp) {
         const response = await axios.post(getApiUrl("/api/auth/signup"), {
-          email,
+          email: cleanedEmail,
           password,
-          name,
+          name: cleanedName,
           role
         });
         const user = response.data.user;
@@ -54,14 +57,26 @@ export const AuthView: React.FC<AuthViewProps> = ({ onAuthSuccess }) => {
         onAuthSuccess(user);
       } else {
         const response = await axios.post(getApiUrl("/api/auth/login"), {
-          email,
+          email: cleanedEmail,
           password
         });
         onAuthSuccess(response.data.user);
       }
     } catch (err: any) {
       console.error(err);
-      const msg = err.response?.data?.detail || "Authentication failed. Please check your network and credentials.";
+      let msg = "Authentication failed. Please check your network and credentials.";
+      if (!err.response) {
+        msg = "Unable to connect to backend server. Please make sure the Python backend server (main.py) is running on port 8000.";
+      } else if (err.response.data?.detail) {
+        const detail = err.response.data.detail;
+        if (typeof detail === "string") {
+          msg = detail;
+        } else if (Array.isArray(detail)) {
+          msg = detail.map((e: any) => e.msg || e.detail || JSON.stringify(e)).join(", ");
+        } else if (typeof detail === "object") {
+          msg = JSON.stringify(detail);
+        }
+      }
       setErrorMsg(msg);
     } finally {
       setLoading(false);
