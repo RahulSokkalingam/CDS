@@ -1,41 +1,39 @@
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-
-node_modules
-dist
-dist-ssr
-*.local
-
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-
-# Credentials and Secrets
-huggingface_token.txt
-gemini_api_key.txt
+# Environment variables and secrets
 .env
-backend/huggingface_token.txt
-backend/gemini_api_key.txt
-backend/.env
+.env.*
+!.env.example
+*.txt
+!requirements.txt
+!frontend/package.json
+!frontend/package-lock.json
 
-# Large model weight files
-*.pt
-backend/*.pt
+# Database
+*.db
+*.sqlite
+*.sqlite3
 
-# Python caches
+# Python / Caches
 __pycache__/
-backend/__pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+.pytest_cache/
+venv/
+env/
+.venv/
+
+# Node / Frontend
+node_modules/
+dist/
+dist-ssr/
+*.local
+.oxlintrc.json
+
+# Docker / Logs
+*.log
+logs/
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

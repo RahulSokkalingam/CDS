@@ -1,22 +1,27 @@
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
-import { 
-  Upload, 
-  Activity, 
-  FileText, 
-  Sparkles, 
-  Cpu, 
-  FileDown, 
-  Moon, 
-  Sun, 
-  RefreshCw, 
-  ArrowRight, 
-  ShieldAlert, 
-  Clock, 
-  Eye
+import { getApiUrl } from "./api/client";
+import {
+  Upload,
+  Activity,
+  FileText,
+  FileDown,
+  RefreshCw,
+  ShieldAlert,
+  Clock,
+  Eye,
+  MapPin,
+  LogOut,
+  User,
+  CheckCircle,
+  AlertTriangle
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { exportToPDF } from "@/utils/pdfGenerator";
+import { AuthView } from "./components/AuthView";
+import type { UserData } from "./components/AuthView";
+import { InspectorDashboard } from "./components/InspectorDashboard";
+import { DroneDashboard } from "./components/DroneDashboard";
 
 // Defect interface
 interface Defect {
@@ -43,84 +48,19 @@ interface DemoAsset {
   defects: Defect[];
 }
 
-const DEMO_ASSETS: DemoAsset[] = [
-  {
-    id: "asset-1",
-    name: "Concrete Pier Column - Bridge #24A",
-    category: "Concrete Structures",
-    originalImage: "/bridge_original.png",
-    processedImage: "/bridge_processed.png",
-    overallSeverity: "Critical",
-    overallConfidence: 98.4,
-    defectArea: 1.84,
-    summary: "Significant shear cracking detected on the primary load-bearing concrete pier of Bridge #24A. Cracks demonstrate active widening trends. Immediate structural intervention is advised.",
-    defects: [
-      {
-        id: "DEF-001",
-        type: "Structural Crack",
-        severity: "Critical",
-        confidence: 98.4,
-        location: "Mid-section, South Pier Face",
-        dimensions: "Width: 4.2mm, Length: 124.5cm",
-        recommendation: "Load testing and immediate structural reinforcement/sealing."
-      },
-      {
-        id: "DEF-002",
-        type: "Concrete Spalling",
-        severity: "Warning",
-        confidence: 91.2,
-        location: "Lower-right edge",
-        dimensions: "Area: 45cm², Depth: 12mm",
-        recommendation: "Patch repairs with polymer-modified repair mortar."
-      },
-      {
-        id: "DEF-003",
-        type: "Efflorescence / Moisture",
-        severity: "Low",
-        confidence: 88.6,
-        location: "Upper-left pier joint",
-        dimensions: "Area: 180cm²",
-        recommendation: "Seal joint and inspect drainage routing."
-      }
-    ]
-  },
-  {
-    id: "asset-2",
-    name: "High-Pressure Gas Pipeline - Segment 4",
-    category: "Steel Infrastructure",
-    originalImage: "/bridge_original.png", 
-    processedImage: "/bridge_processed.png",
-    overallSeverity: "Warning",
-    overallConfidence: 92.5,
-    defectArea: 0.62,
-    summary: "Localized exterior corrosion and coating breakdown identified on Pipe Segment 4. No active wall-thinning leaks detected, but scheduled preservation is required.",
-    defects: [
-      {
-        id: "DEF-004",
-        type: "Surface Corrosion",
-        severity: "Warning",
-        confidence: 92.5,
-        location: "Under-bracket assembly",
-        dimensions: "Area: 120cm², Depth: 0.8mm",
-        recommendation: "Sandblast surface, apply anti-corrosion primer, and recoat."
-      },
-      {
-        id: "DEF-005",
-        type: "Coating Delamination",
-        severity: "Low",
-        confidence: 95.1,
-        location: "Pipe underside, 2m from support",
-        dimensions: "Area: 40cm²",
-        recommendation: "Monitor during next regular routine check."
-      }
-    ]
-  }
-];
-
 function App() {
-  const [darkMode, setDarkMode] = useState<boolean>(true);
+  const [currentUser, setCurrentUser] = useState<UserData | null>(() => {
+    try {
+      const saved = localStorage.getItem("cds_user");
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [locationInput, setLocationInput] = useState<string>("");
+  const [uploadNotification, setUploadNotification] = useState<{ type: "crack" | "clear" | null; message: string }>({ type: null, message: "" });
   const [selectedAsset, setSelectedAsset] = useState<DemoAsset | null>(null);
-  const [selectedEngine, setSelectedEngine] = useState<"yolo" | "gemini">("yolo");
+  const [selectedEngine] = useState<"gemini">("gemini");
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [analysisProgress, setAnalysisProgress] = useState<number>(0);
   const [analysisStepText, setAnalysisStepText] = useState<string>("");
@@ -134,15 +74,23 @@ function App() {
   const [currentBase64Preview, setCurrentBase64Preview] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Apply dark mode class to HTML element
+  // Apply dark mode class permanently to HTML element
   useEffect(() => {
-    const root = window.document.documentElement;
-    if (darkMode) {
-      root.classList.add("dark");
-    } else {
-      root.classList.remove("dark");
-    }
-  }, [darkMode]);
+    window.document.documentElement.classList.add("dark");
+  }, []);
+
+  const handleLogin = (user: UserData) => {
+    setCurrentUser(user);
+    localStorage.setItem("cds_user", JSON.stringify(user));
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    localStorage.removeItem("cds_user");
+    setSelectedAsset(null);
+    setApiError(null);
+    setUploadNotification({ type: null, message: "" });
+  };
 
   // Handle Drag Events
   const handleDragOver = (e: React.DragEvent) => {
@@ -254,26 +202,46 @@ function App() {
       const formData = new FormData();
       formData.append("file", file);
 
-      axios.post(`http://localhost:8000/api/upload?engine=${selectedEngine}`, formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-        onUploadProgress: (progressEvent) => {
-          const percent = Math.round((progressEvent.loaded * 100) / (progressEvent.total || 1));
-          setUploadProgress(percent);
-          if (percent >= 100) {
-            setIsUploading(false);
+      const userEmail = currentUser?.email || "public@cds.io";
+      const userName = currentUser?.name || "Public Reporter";
+      const loc = locationInput.trim() || "Unspecified Location";
+
+      axios.post(
+        getApiUrl(`/api/upload?engine=${selectedEngine}&location=${encodeURIComponent(loc)}&user_email=${encodeURIComponent(userEmail)}&user_name=${encodeURIComponent(userName)}&source=${encodeURIComponent("Public Reporter")}`),
+        formData,
+        {
+          headers: { "Content-Type": "multipart/form-data" },
+          onUploadProgress: (progressEvent) => {
+            const percent = Math.round((progressEvent.loaded * 100) / (progressEvent.total || 1));
+            setUploadProgress(percent);
+            if (percent >= 100) {
+              setIsUploading(false);
+            }
           }
         }
-      })
+      )
         .then((response) => {
+          clearInterval(animationInterval);
           setIsUploading(false);
           setTimeout(() => {
             setIsAnalyzing(false);
-            setSelectedAsset(response.data);
+            const data = response.data;
+            setSelectedAsset(data);
+            if (data.has_crack) {
+              setUploadNotification({
+                type: "crack",
+                message: `Crack detected! Report #${data.id} submitted to the Inspector Assigner Queue.`
+              });
+            } else {
+              setUploadNotification({
+                type: "clear",
+                message: "No cracks detected. The structure appears structurally sound."
+              });
+            }
           }, 1500);
         })
         .catch((err) => {
+          clearInterval(animationInterval);
           setIsUploading(false);
           console.warn("Backend API call failed.", err);
           const msg = err.response?.data?.detail || "Could not reach the diagnostic server on port 8000. Verify the backend is active.";
@@ -285,11 +253,6 @@ function App() {
         setIsAnalyzing(false);
       }, 1500);
     }
-  };
-
-  const handleSelectDemo = (asset: DemoAsset) => {
-    setSelectedAsset(asset);
-    startAnalysisFlow();
   };
 
   const handleExportPDF = async () => {
@@ -317,6 +280,91 @@ function App() {
     }
   };
 
+  // ---- Render: Auth Screen ----
+  if (!currentUser) {
+    return (
+      <div className="app-container">
+        <div className="grid-overlay"></div>
+        <header className="header">
+          <div className="header-logo-group">
+            <img src="/logo.png" alt="CDS Logo" style={{ height: "2.25rem", display: "block" }} />
+            <div className="header-title">Crack Detection System</div>
+          </div>
+        </header>
+        <main className="main-content" style={{ justifyContent: "center", minHeight: "calc(100vh - 140px)" }}>
+          <AuthView onAuthSuccess={handleLogin} />
+        </main>
+      </div>
+    );
+  }
+
+  // ---- Render: Inspector Dashboard ----
+  if (currentUser.role === "inspector") {
+    return (
+      <div className="app-container">
+        <div className="grid-overlay"></div>
+        <header className="header">
+          <div className="header-logo-group">
+            <img src="/logo.png" alt="CDS Logo" style={{ height: "2.25rem", display: "block" }} />
+            <div className="header-title">Crack Detection System</div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <div style={{ width: "32px", height: "32px", borderRadius: "50%", backgroundColor: currentUser.is_admin ? "rgba(245,166,35,0.15)" : "rgba(69,137,255,0.15)", border: `1px solid ${currentUser.is_admin ? "rgba(245,166,35,0.3)" : "rgba(69,137,255,0.3)"}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <User size={14} style={{ color: currentUser.is_admin ? "#f5a623" : "var(--primary)" }} />
+              </div>
+              <div>
+                <div style={{ fontSize: "0.8rem", fontWeight: "600", lineHeight: 1.2 }}>{currentUser.name}</div>
+                <div style={{ fontSize: "0.6rem", fontFamily: "var(--font-mono)", textTransform: "uppercase", color: currentUser.is_admin ? "#f5a623" : "var(--primary)", letterSpacing: "0.5px" }}>{currentUser.is_admin ? "Admin" : "Manual Inspector"}</div>
+              </div>
+            </div>
+            <button onClick={handleLogout} className="btn btn-outline" style={{ padding: "0.4rem 0.75rem", fontSize: "0.75rem", display: "flex", alignItems: "center", gap: "6px" }}>
+              <LogOut size={12} />
+              Sign Out
+            </button>
+          </div>
+        </header>
+        <main className="main-content" style={{ minHeight: "calc(100vh - 140px)", alignItems: "flex-start" }}>
+          <InspectorDashboard currentUser={currentUser} />
+        </main>
+      </div>
+    );
+  }
+
+  // ---- Render: Drone Vision Dashboard ----
+  if (currentUser.role === "drone") {
+    return (
+      <div className="app-container">
+        <div className="grid-overlay"></div>
+        <header className="header">
+          <div className="header-logo-group">
+            <img src="/logo.png" alt="CDS Logo" style={{ height: "2.25rem", display: "block" }} />
+            <div className="header-title">Crack Detection System</div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <div style={{ width: "32px", height: "32px", borderRadius: "50%", backgroundColor: "rgba(34,211,238,0.15)", border: "1px solid rgba(34,211,238,0.3)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <User size={14} style={{ color: "#22d3ee" }} />
+              </div>
+              <div>
+                <div style={{ fontSize: "0.8rem", fontWeight: "600", lineHeight: 1.2 }}>{currentUser.name}</div>
+                <div style={{ fontSize: "0.6rem", fontFamily: "var(--font-mono)", textTransform: "uppercase", color: "#22d3ee", letterSpacing: "0.5px" }}>Drone Vision</div>
+              </div>
+            </div>
+            <button onClick={handleLogout} className="btn btn-outline" style={{ padding: "0.4rem 0.75rem", fontSize: "0.75rem", display: "flex", alignItems: "center", gap: "6px" }}>
+              <LogOut size={12} />
+              Sign Out
+            </button>
+          </div>
+        </header>
+        <main className="main-content" style={{ minHeight: "calc(100vh - 140px)", alignItems: "flex-start" }}>
+          <DroneDashboard currentUser={currentUser} />
+        </main>
+      </div>
+    );
+  }
+
+  // ---- Render: Public Reporter View ----
   return (
     <div className="app-container">
       <div className="grid-overlay"></div>
@@ -324,69 +372,28 @@ function App() {
       {/* Header */}
       <header className="header">
         <div className="header-logo-group">
-          <div className="ibm-logo">IBM</div>
-          <div className="header-title">
-            Infrastructure Inspect <span className="header-subtitle">v9.42</span>
-          </div>
+          <img src="/logo.png" alt="CDS Logo" style={{ height: "2.25rem", display: "block" }} />
+          <div className="header-title">Crack Detection System</div>
         </div>
-
-        <div className="header-controls">
-          <div className="system-status">
-            <span>
-              <span className="status-dot"></span> Core AI Operational
-            </span>
-            <span>
-              <Cpu style={{ width: "14px", height: "14px", verticalAlign: "middle", marginRight: "4px" }} />
-              ResNet-V9 Engine
-            </span>
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <div style={{ width: "32px", height: "32px", borderRadius: "50%", backgroundColor: "rgba(69,137,255,0.15)", border: "1px solid rgba(69,137,255,0.3)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <User size={14} style={{ color: "var(--primary)" }} />
+            </div>
+            <div>
+              <div style={{ fontSize: "0.8rem", fontWeight: "600", lineHeight: 1.2 }}>{currentUser.name}</div>
+              <div style={{ fontSize: "0.6rem", fontFamily: "var(--font-mono)", textTransform: "uppercase", color: "var(--muted-foreground)", letterSpacing: "0.5px" }}>Public Reporter</div>
+            </div>
           </div>
-
-          <button 
-            onClick={() => setDarkMode(!darkMode)}
-            className="btn-icon"
-            aria-label="Toggle dark mode"
-          >
-            {darkMode ? <Sun size={15} style={{ color: "#f5c400" }} /> : <Moon size={15} style={{ color: "#3b82f6" }} />}
+          <button onClick={handleLogout} className="btn btn-outline" style={{ padding: "0.4rem 0.75rem", fontSize: "0.75rem", display: "flex", alignItems: "center", gap: "6px" }}>
+            <LogOut size={12} />
+            Sign Out
           </button>
         </div>
       </header>
 
       {/* Main Container */}
-      <main className="main-content">
-        
-        {/* Hero Section */}
-        <section className="hero-banner">
-          <div className="hero-text">
-            <div className="hero-tag">
-              <Sparkles size={12} style={{ marginRight: "4px" }} />
-              AI Inspection Portal
-            </div>
-            <h2 className="hero-title">Autonomous Infrastructure Diagnostics</h2>
-            <p className="hero-description">
-              Inspect critical concrete, metal, and mechanical infrastructure using deep vision transformers. Upload structural scans to locate cracks, concrete spalling, or corrosion damage immediately.
-            </p>
-          </div>
-          
-          <div className="hero-stats">
-            <div>
-              <div className="stat-label">Platform Status</div>
-              <div className="stat-value" style={{ color: "#24a148" }}>ACTIVE</div>
-            </div>
-            <div>
-              <div className="stat-label">Diagnoses SLA</div>
-              <div className="stat-value">&lt; 3.0s</div>
-            </div>
-            <div style={{ borderTop: "1px solid var(--border)", paddingTop: "0.5rem", marginTop: "0.25rem" }}>
-              <div className="stat-label">Inspection F1</div>
-              <div className="stat-value">98.42%</div>
-            </div>
-            <div style={{ borderTop: "1px solid var(--border)", paddingTop: "0.5rem", marginTop: "0.25rem" }}>
-              <div className="stat-label">Active Node</div>
-              <div className="stat-value" style={{ color: "var(--primary)" }}>us-east-core</div>
-            </div>
-          </div>
-        </section>
-
+      <main className="main-content" style={{ justifyContent: "center", minHeight: "calc(100vh - 140px)" }}>
         <AnimatePresence mode="wait">
           {isAnalyzing ? (
             /* Scanning / Uploading State */
@@ -467,10 +474,10 @@ function App() {
                     {!isUploading && (
                       <div className="console-container">
                         <div className="console-text pulse-slow">
-                          <p>&gt; INFRASTRUCTURE AI ENGINE V9.42 INITIALIZED</p>
+                          <p>&gt; CDS AI ENGINE INITIALIZED</p>
                           <p>&gt; FETCHING IMAGE BOUNDARY BLOCKS...</p>
                           {analysisProgress > 20 && <p>&gt; OK: IMAGE SHAPE (2048, 1536) ALIGNED</p>}
-                          {analysisProgress > 50 && <p>&gt; RUNNING PIXEL CONVOLUTIONS [RESNET BACKBONE]</p>}
+                          {analysisProgress > 50 && <p>&gt; RUNNING PIXEL CONVOLUTIONS [GEMINI 2.5 FLASH]</p>}
                           {analysisProgress > 70 && <p>&gt; DETECTING ANOMALIES: LOCATING CRACK SEGMENTS</p>}
                           {analysisProgress > 90 && <p>&gt; COMPILE DICTIONARY PARSE: DONE</p>}
                         </div>
@@ -488,62 +495,51 @@ function App() {
             /* Drag and Drop Uploader State */
             <motion.div
               key="uploader"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
               className="demo-selector-section"
+              style={{ width: "100%", maxWidth: "700px", margin: "0 auto", textAlign: "center" }}
             >
-              <div className="demo-selector-title">
-                Select a live demo asset to run diagnostics instantly
-              </div>
-              <div className="demo-buttons-group">
-                {DEMO_ASSETS.map((asset) => (
-                  <button
-                    key={asset.id}
-                    onClick={() => handleSelectDemo(asset)}
-                    className="demo-btn"
-                  >
-                    <div className="demo-btn-dot"></div>
-                    <div>
-                      <span className="demo-btn-label">{asset.category}</span>
-                      <span className="demo-btn-name">{asset.name}</span>
-                    </div>
-                    <ArrowRight size={14} style={{ marginLeft: "0.5rem", color: "var(--primary)" }} />
-                  </button>
-                ))}
-              </div>
+              <motion.h1 
+                className="topic-heading"
+                whileHover={{ scale: 1.04, y: -3 }}
+                whileTap={{ scale: 0.98 }}
+                transition={{ type: "spring", stiffness: 350, damping: 18 }}
+              >
+                AI Based Bridge Crack Detection System
+              </motion.h1>
 
-              <div style={{ textAlign: "center", fontSize: "0.75rem", fontFamily: "var(--font-mono)", color: "var(--muted-foreground)", margin: "1.5rem 0" }}>
-                — OR UPLOAD CUSTOM STRUCTURAL PHOTO —
-              </div>
 
-              <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "12px", marginBottom: "1.5rem" }}>
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.75rem", color: "var(--muted-foreground)", textTransform: "uppercase" }}>
-                  Selected Engine:
-                </span>
+
+              {/* Location Input */}
+              <div style={{ marginBottom: "1.5rem", textAlign: "left" }}>
+                <label style={{ display: "block", fontSize: "0.7rem", fontFamily: "var(--font-mono)", color: "var(--muted-foreground)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "0.5rem" }}>
+                  Bridge / Structure Location
+                </label>
                 <div style={{ position: "relative" }}>
-                  <select
-                    value={selectedEngine}
-                    onChange={(e) => setSelectedEngine(e.target.value as "yolo" | "gemini")}
+                  <MapPin size={14} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "var(--primary)", pointerEvents: "none" }} />
+                  <input
+                    type="text"
+                    value={locationInput}
+                    onChange={(e) => setLocationInput(e.target.value)}
+                    placeholder="e.g. Bridge Pier 4B, NH-48 Overpass, Mumbai"
                     style={{
+                      width: "100%",
+                      padding: "0.7rem 0.75rem 0.7rem 2.4rem",
                       backgroundColor: "var(--muted)",
-                      color: "var(--foreground)",
                       border: "1px solid var(--border)",
-                      borderRadius: "0px",
-                      padding: "0.4rem 2rem 0.4rem 0.75rem",
-                      fontFamily: "var(--font-mono)",
-                      fontSize: "0.75rem",
-                      textTransform: "uppercase",
-                      appearance: "none",
-                      cursor: "pointer"
+                      color: "var(--foreground)",
+                      fontSize: "0.85rem",
+                      outline: "none",
+                      borderRadius: "2px",
+                      fontFamily: "var(--font-sans)",
+                      boxSizing: "border-box",
+                      transition: "border-color 0.2s ease"
                     }}
-                  >
-                    <option value="yolo">YOLOv8-Seg (Local Model)</option>
-                    <option value="gemini">Gemini 2.5 Flash (Cloud VLM)</option>
-                  </select>
-                  <div style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", fontSize: "0.55rem", color: "var(--muted-foreground)" }}>
-                    ▼
-                  </div>
+                    onFocus={(e) => (e.target.style.borderColor = "var(--primary)")}
+                    onBlur={(e) => (e.target.style.borderColor = "var(--border)")}
+                  />
                 </div>
               </div>
 
@@ -553,12 +549,13 @@ function App() {
                 onDrop={handleDrop}
                 onClick={() => fileInputRef.current?.click()}
                 className={`dropzone ${isDragOver ? "active" : ""}`}
+                style={{ marginTop: "1rem" }}
               >
                 <input
                   type="file"
                   ref={fileInputRef}
                   onChange={handleFileSelect}
-                  accept="image/*"
+                  accept="image/*,video/*"
                   style={{ display: "none" }}
                 />
                 
@@ -566,10 +563,10 @@ function App() {
                   <Upload size={20} />
                 </div>
                 <h3 className="dropzone-title">
-                  Drag & drop asset photo here, or <span className="dropzone-link">browse</span>
+                  Drag & drop asset photo or video here, or <span className="dropzone-link">browse</span>
                 </h3>
                 <p className="dropzone-subtitle">
-                  Accepts PNG, JPG, JPEG (Max 15MB)
+                  Accepts PNG, JPG, JPEG, MP4, WebM (Max 15MB)
                 </p>
               </div>
             </motion.div>
@@ -577,11 +574,38 @@ function App() {
             /* Results Page View */
             <motion.div
               key="results"
+              style={{ width: "100%" }}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               id="inspection-report-dashboard"
             >
+              {/* Notification Banner */}
+              <AnimatePresence>
+                {uploadNotification.type && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    style={{
+                      display: "flex", alignItems: "center", gap: "10px",
+                      padding: "0.85rem 1.25rem", marginBottom: "1.5rem", borderRadius: "4px",
+                      border: `1px solid ${uploadNotification.type === "crack" ? "var(--critical)" : "#24a148"}`,
+                      backgroundColor: uploadNotification.type === "crack" ? "var(--critical-bg)" : "rgba(36,161,72,0.08)",
+                      fontSize: "0.82rem", fontFamily: "var(--font-mono)"
+                    }}
+                  >
+                    {uploadNotification.type === "crack"
+                      ? <AlertTriangle size={16} style={{ color: "var(--critical)", flexShrink: 0 }} />
+                      : <CheckCircle size={16} style={{ color: "#24a148", flexShrink: 0 }} />
+                    }
+                    <span style={{ color: uploadNotification.type === "crack" ? "var(--critical)" : "#24a148" }}>
+                      {uploadNotification.message}
+                    </span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               {/* Header inside results */}
               <div className="results-header-bar">
                 <div>
@@ -595,6 +619,7 @@ function App() {
                   <button
                     onClick={() => {
                       setSelectedAsset(null);
+                      setUploadNotification({ type: null, message: "" });
                     }}
                     className="btn btn-outline"
                   >
@@ -738,7 +763,7 @@ function App() {
                       {selectedAsset.defectArea !== undefined && (
                         <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginTop: "1.5rem", borderTop: "1px dashed var(--border)", paddingTop: "1rem" }}>
                           <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", fontFamily: "var(--font-mono)" }}>
-                            <span style={{ color: "var(--muted-foreground)" }}>YOLO Defect Area Ratio</span>
+                            <span style={{ color: "var(--muted-foreground)" }}>Defect Area Ratio</span>
                             <span style={{ color: "var(--critical)", fontWeight: "bold" }}>{selectedAsset.defectArea}%</span>
                           </div>
                           <div className="progress-bar-track">
@@ -832,18 +857,6 @@ function App() {
           )}
         </AnimatePresence>
       </main>
-
-      {/* Footer */}
-      <footer className="footer">
-        <div>
-          © 2026 IBM Corporation & Partners. Diagnostic engines licensed under Apache-2.0.
-        </div>
-        <div className="footer-links">
-          <a href="#">Diagnostic Terms</a>
-          <a href="#">AI Ethics Statement</a>
-          <a href="#">System Specs</a>
-        </div>
-      </footer>
     </div>
   );
 }
