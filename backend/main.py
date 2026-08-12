@@ -797,6 +797,34 @@ async def generate_granite_report(defects: List[dict], overall_severity: str, de
       f"<|assistant|>\n"
   )
 
+  # Primary: Use Gemini 2.5 Flash to generate structural report
+  gemini_client = get_gemini_client()
+  if gemini_client:
+    try:
+      def _gen_report():
+        report_prompt = (
+            "You are a professional structural engineering inspector. Analyze the following concrete/steel diagnostic data and generate a highly professional, concise inspection report.\n"
+            "Format your response EXACTLY in these four sections, starting each on a new line. Do not use markdown bolding in headers:\n"
+            "FINDINGS: [Write a summary of the defect types, sizes, locations, and total defect area]\n"
+            "RISKS: [Detail structural load concerns, failure risks, and safety implications]\n"
+            "RECOMMENDATIONS: [Provide precise engineering repair actions and preventative maintenance steps]\n"
+            "URGENCY: [IMMEDIATE / WITHIN 30 DAYS / SCHEDULED ROUTINE MONITORING]\n\n"
+            f"Defect log data:\n{defects_str}\n"
+            f"Overall Severity: {overall_severity}\n"
+            f"Total Defect Area Ratio: {defect_area}%\n"
+        )
+        return gemini_client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=report_prompt
+        )
+      loop = asyncio.get_running_loop()
+      res = await loop.run_in_executor(None, _gen_report)
+      if res.text and len(res.text.strip()) > 30:
+        logger.info("Successfully generated structural report via Gemini Cloud VLM.")
+        return res.text.strip()
+    except Exception as e:
+      logger.warning(f"Gemini report generation failed ({e}). Trying Hugging Face backup...")
+
   url = "https://api-inference.huggingface.co/models/ibm-granite/granite-3.0-8b-instruct"
   headers = {"Content-Type": "application/json"}
   if HF_TOKEN:
@@ -812,7 +840,7 @@ async def generate_granite_report(defects: List[dict], overall_severity: str, de
   }
 
   try:
-    async with httpx.AsyncClient(timeout=15.0) as client:
+    async with httpx.AsyncClient(timeout=10.0) as client:
       res = await client.post(url, headers=headers, json=payload)
       if res.status_code == 200:
         data = res.json()
@@ -828,9 +856,8 @@ async def generate_granite_report(defects: List[dict], overall_severity: str, de
           
         if text and len(text) > 40:
           return text
-      logger.warning(f"Hugging Face serverless endpoint responded with code {res.status_code}")
   except Exception as e:
-    logger.error(f"Error querying Hugging Face Serverless Granite API: {str(e)}")
+    logger.debug(f"Hugging Face Granite endpoint fallback skipped: {e}")
 
   # High-fidelity Local Fallback Report Template
   logger.info("Using local template generator for Granite report fallback.")
