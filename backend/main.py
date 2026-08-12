@@ -558,7 +558,7 @@ async def detect_with_gemini_video(video_path: str, filename: str, height: int, 
         raise Exception("GCS_VIDEO_BUCKET env var is not set — required for video detection under Vertex AI.")
       try:
         import importlib
-        gcs_storage: Any = importlib.import_module("google.cloud.storage")
+        gcs_storage = importlib.import_module("google.cloud.storage")
       except Exception:
         raise Exception("google-cloud-storage package is required for Vertex AI video scanning. Run `pip install google-cloud-storage`.")
       import uuid
